@@ -255,6 +255,11 @@ function StaffSignupPanel({ onBack, onPending }) {
     }
     setLoading(true)
     try {
+      // Check if Supabase is configured
+      if (!supabase.supabaseUrl || !supabase.supabaseKey) {
+        throw new Error('Supabase not configured. Check .env.local file and console for details.')
+      }
+
       const res = await supabase.functions.invoke('staff-signup', {
         body: {
           name: form.name.trim(),

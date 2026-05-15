@@ -66,7 +66,7 @@ export default function ItemTable({ items = [], loading = false, highlightId = n
         </div>
 
         {/* Mobile skeleton */}
-        <div className="md:hidden">
+        <div className="md:hidden w-full overflow-x-hidden">
           {[...Array(6)].map((_, i) => <Skeleton.Card key={i} />)}
         </div>
       </>
@@ -76,7 +76,7 @@ export default function ItemTable({ items = [], loading = false, highlightId = n
   // ── Empty state ────────────────────────────────────────────
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
+      <div className="flex flex-col items-center justify-center py-20 gap-3 w-full">
         <div
           className="w-14 h-14 rounded-2xl flex items-center justify-center"
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
@@ -146,7 +146,7 @@ export default function ItemTable({ items = [], loading = false, highlightId = n
       </div>
 
       {/* ── Mobile cards (< md) ───────────────────────────── */}
-      <div className="md:hidden">
+      <div className="md:hidden w-full overflow-x-hidden">
         {items.map((item, idx) => {
           const isHighlighted = item.id === highlightId
           return (
