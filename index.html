@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Theme color: amber for light, dark brown for dark mode -->
+    <meta name="theme-color" content="#d4842a" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#2b1e1a" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="Textile & garment supplies price catalogue" />
+    <!-- PWA / Add to Home Screen -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="PriceMaster" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+    <!-- Prevent flash of unstyled content — theme init runs in head -->
+    <script>
+      try {
+        var s = localStorage.getItem('pm_theme');
+        if (s === 'dark') document.documentElement.classList.add('dark');
+        else if (!s && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.add('dark');
+      } catch(e) {}
+    </script>
+    <title>PriceMaster</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
