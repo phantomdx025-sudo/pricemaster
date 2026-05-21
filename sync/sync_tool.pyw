@@ -25,6 +25,7 @@ import customtkinter as ctk
 
 import sync_core
 import fin_sync_tool_tab
+import sundry_analyser_tab
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,8 @@ DEFAULT_CONFIG = {
     "fin_debtors_path": "",
     "fin_creditors_path": "",
     "fin_address_path": "",
+    "sa_debtors_path": "",
+    "sa_creditors_path": "",
 }
 
 def load_config() -> dict:
@@ -165,8 +168,8 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title("PriceMaster Sync")
-        self.geometry("640x700")
-        self.minsize(520, 560)
+        self.geometry("680x800")
+        self.minsize(560, 640)
         self.resizable(True, True)
 
         self._config = load_config()
@@ -193,7 +196,7 @@ class App(ctk.CTk):
         title_frame.grid(row=0, column=0, sticky="w")
         ctk.CTkLabel(title_frame, text="PriceMaster Sync",
                      font=ctk.CTkFont(size=22, weight="bold")).pack(side="left")
-        ctk.CTkLabel(title_frame, text="  ·  Inventory sync tool",
+        ctk.CTkLabel(title_frame, text="  ·  Inventory & Financial sync",
                      font=ctk.CTkFont(size=13), text_color="gray").pack(side="left", pady=(4, 0))
 
         # Settings gear button
@@ -214,12 +217,13 @@ class App(ctk.CTk):
         )
         self._banner.grid(row=1, column=0, sticky="ew", padx=20, pady=(10, 0))
 
-        # ── Tab view: Inventory | Financial ───────────────────────────────
+        # ── Tab view: Inventory | Financial | Sundry Analyser ────────────
         self._tabview = ctk.CTkTabview(self)
         self._tabview.grid(row=2, column=0, sticky="nsew", padx=20, pady=(8, 0))
 
         inv_tab = self._tabview.add("📦  Inventory")
         fin_tab = self._tabview.add("💹  Financial")
+        sa_tab  = self._tabview.add("📊  Sundry Analyser")
 
         # ── Inventory tab content (existing push/pull + log) ──────────────
         inv_tab.grid_columnconfigure(0, weight=1)
@@ -338,6 +342,18 @@ class App(ctk.CTk):
             log_callback=self._log,
         )
         self._fin_tab.grid(row=0, column=0, sticky="nsew")
+
+        # ── Sundry Analyser tab content ───────────────────────────────────
+        sa_tab.grid_columnconfigure(0, weight=1)
+        sa_tab.grid_rowconfigure(0, weight=1)
+
+        self._sa_tab = sundry_analyser_tab.SundryAnalyserTab(
+            sa_tab,
+            config_getter=lambda: self._config,
+            config_saver=save_config,
+            log_callback=self._log,
+        )
+        self._sa_tab.grid(row=0, column=0, sticky="nsew")
 
     # ── Settings ──────────────────────────────────────────────────────────────
 

@@ -45,6 +45,7 @@ export default function Navbar({ staffUser, onLogout, onSearchOpen, showSearch =
         background: 'var(--bg-surface)',
         borderBottom: '1px solid var(--border)',
         boxShadow: 'var(--shadow-sm)',
+        paddingTop: 'env(safe-area-inset-top)',
       }}
     >
       {/* Brand */}
