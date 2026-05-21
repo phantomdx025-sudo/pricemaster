@@ -160,6 +160,27 @@ Deno.serve(async (req: Request) => {
         return json({ success: true })
       }
 
+      // ── COL SETTINGS: upsert all 5 column settings ─────────
+      case 'set-col-settings': {
+        const { settings } = payload
+        if (!Array.isArray(settings) || settings.length === 0) {
+          return new Response(JSON.stringify({ error: 'settings must be a non-empty array' }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        const rows = settings.map((s: { key: string; label: string; visible: boolean; position: number }) => ({
+          key:      s.key,
+          label:    s.label?.trim() || s.key,
+          visible:  s.visible ?? true,
+          position: s.position ?? 0,
+        }))
+        const { error } = await admin
+          .from('inv_col_settings')
+          .upsert(rows, { onConflict: 'key' })
+        if (error) throw error
+        return json({ success: true })
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

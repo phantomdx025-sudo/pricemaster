@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, FolderCog } from 'lucide-react'
+import { Plus, Pencil, Trash2, FolderCog, SlidersHorizontal } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useInventory } from '../hooks/useInventory'
 import { useCatalogueWrite } from '../hooks/useCatalogueWrite'
@@ -21,9 +21,11 @@ import Spinner from '../components/ui/Spinner'
 import { toast } from '../components/ui/Toast'
 import SearchBox from '../components/catalogue/SearchBox'
 import { buildSearchIndex } from '../utils/search'
+import ColSettingsPanel from '../components/ui/ColSettingsPanel'
+import { useColSettings } from '../hooks/useColSettings'
 
 // ── Admin item table ────────────────────────────────────────
-function AdminItemRow({ item, index, onEdit, onDelete }) {
+function AdminItemRow({ item, index, onEdit, onDelete, visibleCols }) {
   return (
     <tr
       className="group transition-colors"
@@ -38,9 +40,9 @@ function AdminItemRow({ item, index, onEdit, onDelete }) {
       <td className="px-3 py-2.5 font-medium text-sm" style={{ color: 'var(--text-primary)', minWidth: '160px' }}>
         {item.item_name || <span style={{ color: 'var(--text-muted)' }}>—</span>}
       </td>
-      {['rate', 'rate_without_gst', 'unit_qty', 'qty', 'qty_with_gst'].map((col) => (
-        <td key={col} className="px-3 py-2.5 text-right font-mono text-sm" style={{ color: item[col] ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-          {item[col] || '—'}
+      {(visibleCols || []).map((col) => (
+        <td key={col.key} className="px-3 py-2.5 text-right font-mono text-sm" style={{ color: item[col.key] ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+          {item[col.key] || '—'}
         </td>
       ))}
       {/* Actions */}
@@ -68,7 +70,7 @@ function AdminItemRow({ item, index, onEdit, onDelete }) {
   )
 }
 
-function AdminItemCard({ item, index, onEdit, onDelete }) {
+function AdminItemCard({ item, index, onEdit, onDelete, visibleCols }) {
   return (
     <div
       className="px-4 py-3"
@@ -95,20 +97,16 @@ function AdminItemCard({ item, index, onEdit, onDelete }) {
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
-        {[
-          { label: 'Rate', value: item.rate },
-          { label: 'W/O GST', value: item.rate_without_gst },
-          { label: 'Unit/Qty', value: item.unit_qty },
-          { label: 'Qty Rate', value: item.qty },
-          { label: 'QTY w/GST', value: item.qty_with_gst },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <p className="uppercase tracking-wide font-semibold mb-0.5" style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>{label}</p>
-            <p className="font-mono" style={{ color: value ? 'var(--text-primary)' : 'var(--text-muted)' }}>{value || '—'}</p>
-          </div>
-        ))}
-      </div>
+      {visibleCols.length > 0 && (
+        <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
+          {visibleCols.map(({ key, label }) => (
+            <div key={key}>
+              <p className="uppercase tracking-wide font-semibold mb-0.5" style={{ color: 'var(--text-muted)', fontSize: '0.68rem' }}>{label}</p>
+              <p className="font-mono" style={{ color: item[key] ? 'var(--text-primary)' : 'var(--text-muted)' }}>{item[key] || '—'}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -117,6 +115,8 @@ function AdminItemCard({ item, index, onEdit, onDelete }) {
 export default function AdminCatalogue({ searchOpen = false, onSearchClose = () => {} }) {
   const { isReconfirmed, reconfirmIdentity } = useAuth()
   const { call: writeCall, loading: writing } = useCatalogueWrite()
+  const { cols, reload: reloadCols } = useColSettings()
+  const visibleCols = cols.filter(c => c.visible)
 
   const {
     categories,
@@ -152,6 +152,9 @@ export default function AdminCatalogue({ searchOpen = false, onSearchClose = () 
 
   // Category manager
   const [catManagerOpen, setCatManagerOpen] = useState(false)
+
+  // Column settings panel
+  const [colSettingsOpen, setColSettingsOpen] = useState(false)
 
   // Search state
   const [fuse, setFuse]           = useState(null)
@@ -385,6 +388,15 @@ export default function AdminCatalogue({ searchOpen = false, onSearchClose = () 
             >
               <FolderCog size={14} /> Categories
             </button>
+            {/* Column settings */}
+            <button
+              className="btn-ghost py-1.5 px-3 text-xs flex items-center gap-1.5"
+              onClick={() => setColSettingsOpen(true)}
+              title="Column settings"
+            >
+              <SlidersHorizontal size={14} />
+              <span className="hidden sm:inline">Columns</span>
+            </button>
             {/* Add item */}
             {!noTabs && activeTabId && (
               <button className="btn-primary py-1.5 px-3 text-sm flex items-center gap-1.5" onClick={handleAddItem}>
@@ -460,7 +472,7 @@ export default function AdminCatalogue({ searchOpen = false, onSearchClose = () 
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                      {['#', 'Item Name', 'Rate', 'W/O GST', 'Unit/Qty', 'Qty Rate', 'QTY w/GST', ''].map((h, i) => (
+                      {['#', 'Item Name', ...visibleCols.map(c => c.label), ''].map((h, i) => (
                         <th
                           key={i}
                           className={`px-3 py-3 font-semibold text-xs uppercase tracking-wide ${i === 0 || i > 1 ? 'text-right' : 'text-left'}`}
@@ -479,6 +491,7 @@ export default function AdminCatalogue({ searchOpen = false, onSearchClose = () 
                         index={idx}
                         onEdit={handleEditItem}
                         onDelete={handleDeleteItemClick}
+                        visibleCols={visibleCols}
                       />
                     ))}
                   </tbody>
@@ -493,6 +506,7 @@ export default function AdminCatalogue({ searchOpen = false, onSearchClose = () 
                     index={idx}
                     onEdit={handleEditItem}
                     onDelete={handleDeleteItemClick}
+                    visibleCols={visibleCols}
                   />
                 ))}
               </div>
@@ -562,6 +576,13 @@ export default function AdminCatalogue({ searchOpen = false, onSearchClose = () 
         isReconfirmed={isReconfirmed}
         reconfirmIdentity={reconfirmIdentity}
         writeCall={writeCall}
+      />
+
+      {/* ── Column settings panel ─────────────────────────── */}
+      <ColSettingsPanel
+        open={colSettingsOpen}
+        onClose={() => { setColSettingsOpen(false); reloadCols() }}
+        currentCols={cols}
       />
     </div>
   )

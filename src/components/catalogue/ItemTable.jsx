@@ -1,15 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Skeleton from '../ui/Skeleton'
-
-const COLS = [
-  { key: 'sl',               label: 'Sl.No',      align: 'right',  width: 'w-12'   },
-  { key: 'item_name',        label: 'Item Name',  align: 'left',   width: 'flex-1' },
-  { key: 'rate',             label: 'Rate',       align: 'right',  width: 'w-24'   },
-  { key: 'rate_without_gst', label: 'W/O GST',    align: 'right',  width: 'w-24'   },
-  { key: 'unit_qty',         label: 'Unit/Qty',   align: 'right',  width: 'w-20'   },
-  { key: 'qty',              label: 'Qty Rate',   align: 'right',  width: 'w-24'   },
-  { key: 'qty_with_gst',     label: 'QTY w/GST', align: 'right',  width: 'w-24'   },
-]
+import { useColSettings } from '../../hooks/useColSettings'
 
 function Cell({ value, align }) {
   const isEmpty = value === null || value === undefined || value === ''
@@ -32,6 +23,10 @@ function Cell({ value, align }) {
  */
 export default function ItemTable({ items = [], loading = false, highlightId = null }) {
   const highlightRef = useRef(null)
+  const { cols } = useColSettings()
+
+  // Only the visible columns, in order
+  const visibleCols = cols.filter(c => c.visible)
 
   useEffect(() => {
     if (highlightId && highlightRef.current) {
@@ -48,10 +43,22 @@ export default function ItemTable({ items = [], loading = false, highlightId = n
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                {COLS.map(col => (
+                <th
+                  className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-right w-12"
+                  style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', whiteSpace: 'nowrap' }}
+                >
+                  Sl.No
+                </th>
+                <th
+                  className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-left flex-1"
+                  style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', whiteSpace: 'nowrap' }}
+                >
+                  Item Name
+                </th>
+                {visibleCols.map(col => (
                   <th
                     key={col.key}
-                    className={`px-4 py-3 font-semibold text-xs uppercase tracking-wide ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.width}`}
+                    className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-right w-24"
                     style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', whiteSpace: 'nowrap' }}
                   >
                     {col.label}
@@ -100,10 +107,22 @@ export default function ItemTable({ items = [], loading = false, highlightId = n
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr style={{ borderBottom: '2px solid var(--border)' }}>
-              {COLS.map(col => (
+              <th
+                className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-right w-12"
+                style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', whiteSpace: 'nowrap' }}
+              >
+                Sl.No
+              </th>
+              <th
+                className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-left"
+                style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', whiteSpace: 'nowrap', minWidth: '160px' }}
+              >
+                Item Name
+              </th>
+              {visibleCols.map(col => (
                 <th
                   key={col.key}
-                  className={`px-4 py-3 font-semibold text-xs uppercase tracking-wide ${col.align === 'right' ? 'text-right' : 'text-left'} ${col.width}`}
+                  className="px-4 py-3 font-semibold text-xs uppercase tracking-wide text-right w-24"
                   style={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', whiteSpace: 'nowrap' }}
                 >
                   {col.label}
@@ -133,9 +152,9 @@ export default function ItemTable({ items = [], loading = false, highlightId = n
                   <td className="px-4 py-2.5 font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
                     <Cell value={item.item_name} align="left" />
                   </td>
-                  {['rate', 'rate_without_gst', 'unit_qty', 'qty', 'qty_with_gst'].map((col) => (
-                    <td key={col} className="px-4 py-2.5 font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
-                      <Cell value={item[col]} align="right" />
+                  {visibleCols.map((col) => (
+                    <td key={col.key} className="px-4 py-2.5 font-mono text-sm" style={{ color: 'var(--text-primary)' }}>
+                      <Cell value={item[col.key]} align="right" />
                     </td>
                   ))}
                 </tr>
@@ -170,25 +189,21 @@ export default function ItemTable({ items = [], loading = false, highlightId = n
                 </span>
               </div>
 
-              {/* Price grid */}
-              <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs ml-5">
-                {[
-                  { label: 'Rate',      value: item.rate },
-                  { label: 'W/O GST',   value: item.rate_without_gst },
-                  { label: 'Unit/Qty',  value: item.unit_qty },
-                  { label: 'Qty Rate',  value: item.qty },
-                  { label: 'QTY w/GST', value: item.qty_with_gst },
-                ].map(({ label, value }) => (
-                  <div key={label}>
-                    <span className="block" style={{ color: 'var(--text-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      {label}
-                    </span>
-                    <span className="font-mono font-medium" style={{ color: value ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      {value || '—'}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {/* Price grid — only visible cols */}
+              {visibleCols.length > 0 && (
+                <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs ml-5">
+                  {visibleCols.map(({ key, label }) => (
+                    <div key={key}>
+                      <span className="block" style={{ color: 'var(--text-muted)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {label}
+                      </span>
+                      <span className="font-mono font-medium" style={{ color: item[key] ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                        {item[key] || '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
