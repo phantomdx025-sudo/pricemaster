@@ -72,20 +72,33 @@ export default function AdminFinancialContent() {
 
   // BX-3: Scroll persistence
   const containerRef = useRef(null)
+  const scrollRestored = useRef(false)
 
+  // Save scroll position on unmount
   useEffect(() => {
-    // Restore scroll on mount (after render)
-    const saved = sessionStorage.getItem('fin_scroll')
-    if (saved && containerRef.current) {
-      containerRef.current.scrollTop = parseInt(saved, 10)
-    }
     return () => {
-      // Save scroll on unmount
       if (containerRef.current) {
         sessionStorage.setItem('fin_scroll', String(containerRef.current.scrollTop))
       }
     }
   }, [])
+
+  // Restore scroll position only after the list has actually rendered with content.
+  // Restoring on mount fires too early — the party cards aren't in the DOM yet so
+  // scrollTop has nothing to scroll into and snaps back to 0.
+  useEffect(() => {
+    if (scrollRestored.current) return
+    const saved = sessionStorage.getItem('fin_scroll')
+    if (!saved) return
+    const parties = activeTab === 'debtors' ? debtors : creditors
+    if (parties.length === 0) return  // wait until list has content
+    scrollRestored.current = true
+    requestAnimationFrame(() => {
+      if (containerRef.current) {
+        containerRef.current.scrollTop = parseInt(saved, 10)
+      }
+    })
+  }, [debtors, creditors, activeTab])
   const [debtorLabelMap,  setDebtorLabelMap]  = useState(new Map())
   const [creditorLabelMap,setCreditorLabelMap]= useState(new Map())
   const [searchOpen,      setSearchOpen]      = useState(false)

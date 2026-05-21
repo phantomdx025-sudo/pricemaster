@@ -129,9 +129,13 @@ export default function AdminLedger() {
   const list = partyType === 'creditor' ? creditors : debtors
   const party = list.find(p => p.party_name === decodedName) ?? null
 
-  // Back navigation — return to financial section
+  // Back navigation — go to previous page in history (Reports, Financial, wherever)
   const handleBack = () => {
-    navigate('/admin', { state: { section: 'financial' } })
+    if (window.history.length > 1) {
+      navigate(-1)
+    } else {
+      navigate('/admin', { state: { section: 'financial' } })
+    }
   }
 
   // ── PDF helpers ─────────────────────────────────────────────────────────────
@@ -318,7 +322,7 @@ export default function AdminLedger() {
               onClick={handleBack}
               className="flex items-center gap-1.5 text-xs flex-shrink-0 transition-opacity hover:opacity-70"
               style={{ color: 'var(--brand)', minHeight: '36px', paddingTop: '2px' }}
-              aria-label="Back to Financial"
+              aria-label="Go back"
             >
               <ArrowLeft size={16} />
               <span className="hidden sm:inline">Financial</span>
