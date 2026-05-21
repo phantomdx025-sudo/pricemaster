@@ -74,17 +74,14 @@ export default function FinLabelPicker({
       {/* Picker container */}
       <div
         ref={pickerRef}
-        className={[
-          'z-[71] animate-fade-in',
-          // Desktop: absolute popover positioned by parent
-          'md:absolute md:right-0 md:top-full md:mt-1 md:w-56 md:rounded-xl md:shadow-lg',
-          // Mobile: fixed bottom sheet
-          'fixed bottom-0 inset-x-0 rounded-t-2xl md:rounded-xl',
-        ].join(' ')}
+        className="z-[71] animate-fade-in fixed bottom-0 inset-x-0 rounded-t-2xl md:absolute md:bottom-auto md:inset-x-auto md:right-0 md:top-full md:mt-1 md:w-56 md:rounded-xl"
         style={{
           background: 'var(--bg-surface)',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-lg)',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
+          isolation: 'isolate',
         }}
       >
         {/* Mobile drag handle */}
