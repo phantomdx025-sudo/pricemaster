@@ -170,6 +170,7 @@ export async function generatePartyPDF(partyData, ledgerRows, outstandingRows, a
 
   // ── Closing balance highlight box ────────────────────────────────────────
   y += 2
+  const openingBal = partyData.opening_bal ?? 0
   const bal      = partyData.closing_bal ?? 0
   const balLabel = partyData.party_type === 'debtor' ? 'Closing Receivable' : 'Closing Payable'
   const balColor = bal < 0 ? C.errorLight : C.brandLight
@@ -196,8 +197,19 @@ export async function generatePartyPDF(partyData, ledgerRows, outstandingRows, a
     doc.text('Transaction Ledger', ML, y)
     y += 4
 
-    const lRows = ledgerRows.map((r, idx) => {
-      const isFirst = idx === 0
+    const openingBalRow = {
+      date:    '—',
+      type:    'Opening Balance',
+      vchNo:   '',
+      debit:   '',
+      credit:  '',
+      balance: fmtAmt(openingBal),
+      _isLast:    false,
+      _balNeg:    openingBal < 0,
+      _isOpening: true,
+    }
+
+    const lRows = [openingBalRow, ...ledgerRows.map((r, idx) => {
       const isLast  = idx === ledgerRows.length - 1
       return {
         date:       fmtDate(r.txn_date),
@@ -207,12 +219,11 @@ export async function generatePartyPDF(partyData, ledgerRows, outstandingRows, a
         debit:      (r.debit  ?? 0) > 0 ? fmtAmt(r.debit)  : '',
         credit:     (r.credit ?? 0) > 0 ? fmtAmt(r.credit) : '',
         balance:    fmtAmt(r.balance),
-        _isFirst:   isFirst,
         _isLast:    isLast,
         _balNeg:    (r.balance ?? 0) < 0,
-        _balVal:    r.balance ?? 0,
+        _isOpening: false,
       }
-    })
+    })]
 
     autoTable(doc, {
       startY: y,
@@ -251,16 +262,12 @@ export async function generatePartyPDF(partyData, ledgerRows, outstandingRows, a
         const row = lRows[data.row.index]
         if (!row) return
 
-        // Opening row (first): brand-light tint
-        if (row._isFirst) {
-          doc.setFillColor(...C.brandLight)
-        }
         // Closing row (last): elevated tint
-        else if (row._isLast) {
+        if (row._isLast) {
           doc.setFillColor(...C.elevated)
         }
 
-        // Balance column colour (index 5 now, was 6 before narration removal)
+        // Balance column colour (index 5)
         if (data.column.index === 5 && row._balNeg) {
           data.cell.styles.textColor = C.error
         } else if (data.column.index === 5) {

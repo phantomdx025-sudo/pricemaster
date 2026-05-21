@@ -319,6 +319,89 @@ def _cross_validate(summary_parties: list[dict], ledger_rows: list[dict],
 
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  Internal push helper — shared by both sync paths                          ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+def _push_parsed_data(
+    party_type: str,
+    summary_parties: list[dict],
+    ledger_rows: list[dict],
+    outstanding_rows: list[dict],
+    supabase_url: str,
+    service_role_key: str,
+    log_callback=None,
+    t_start: float = None,
+) -> tuple[bool, str]:
+    """
+    Delete existing data for party_type and re-insert the three row-sets.
+    Called by both the xlsx-based sync path and the direct analyser path.
+    Returns (success, summary_message).
+    """
+    import time as _time
+    if t_start is None:
+        t_start = _time.time()
+
+    label = "debtor" if party_type == "debtor" else "creditor"
+    label_plural = "debtors" if party_type == "debtor" else "creditors"
+
+    try:
+        _log(log_callback, "🔌 Connecting to Supabase…")
+        sb = _admin_client(supabase_url, service_role_key)
+
+        _log(log_callback, f"🗑  Deleting existing {label_plural} from fin_parties…")
+        sb.table("fin_parties").delete().eq("party_type", party_type).execute()
+
+        _log(log_callback, f"🗑  Deleting existing {label_plural} from fin_ledger…")
+        sb.table("fin_ledger").delete().eq("party_type", party_type).execute()
+
+        _log(log_callback, f"🗑  Deleting existing {label_plural} from fin_outstanding…")
+        sb.table("fin_outstanding").delete().eq("party_type", party_type).execute()
+
+        _log(log_callback, f"📤 Inserting {len(summary_parties)} parties…")
+        _insert_chunks(sb, "fin_parties", summary_parties, log_callback)
+
+        _log(log_callback, f"📤 Inserting {len(ledger_rows)} ledger rows…")
+        _insert_chunks(sb, "fin_ledger", ledger_rows, log_callback)
+
+        if outstanding_rows:
+            _log(log_callback, f"📤 Inserting {len(outstanding_rows)} outstanding rows…")
+            _insert_chunks(sb, "fin_outstanding", outstanding_rows, log_callback)
+        else:
+            _log(log_callback, f"  (No outstanding rows — all {label_plural} settled.)")
+
+        sb.table("fin_sync_log").insert({
+            "file_type": label_plural,
+            "row_count": len(ledger_rows),
+            "party_count": len(summary_parties),
+            "status": "success",
+        }).execute()
+
+        elapsed = _time.time() - t_start
+        msg = (
+            f"✅ {label_plural.capitalize()} synced — {len(summary_parties)} parties, "
+            f"{len(ledger_rows)} ledger rows, "
+            f"{len(outstanding_rows)} outstanding rows "
+            f"({elapsed:.1f}s)"
+        )
+        _log(log_callback, msg)
+        return True, msg
+
+    except Exception as exc:
+        msg = f"❌ {label_plural.capitalize()} sync failed: {exc}"
+        _log(log_callback, msg)
+        try:
+            _admin_client(supabase_url, service_role_key).table("fin_sync_log").insert({
+                "file_type": label_plural,
+                "row_count": 0,
+                "party_count": 0,
+                "status": f"error: {exc}",
+            }).execute()
+        except Exception:
+            pass
+        return False, msg
+
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║  Public API                                                                 ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -329,7 +412,7 @@ def sync_debtors(
     log_callback=None,
 ) -> tuple[bool, str]:
     """
-    Parse Sundry Debtors Excel and push to Supabase.
+    Parse Sundry Debtors Excel (analyser output) and push to Supabase.
     Returns (success: bool, summary_message: str).
     """
     t_start = time.time()
@@ -339,7 +422,6 @@ def sync_debtors(
         _log(log_callback, "📂 Loading Sundry Debtors Excel…")
         wb = load_workbook(excel_path, read_only=True, data_only=True)
 
-        # ── Parse ─────────────────────────────────────────────────────────
         _log(log_callback, "📊 Parsing Summary sheet…")
         summary_parties = _parse_summary_sheet(wb["Summary"], party_type)
         _log(log_callback, f"  → Found {len(summary_parties)} parties in Summary.")
@@ -358,52 +440,13 @@ def sync_debtors(
 
         wb.close()
 
-        # ── Cross-validate ─────────────────────────────────────────────────
         _log(log_callback, "🔍 Cross-validating parties vs ledger…")
         _cross_validate(summary_parties, ledger_rows, log_callback)
 
-        # ── Upload ────────────────────────────────────────────────────────
-        _log(log_callback, "🔌 Connecting to Supabase…")
-        sb = _admin_client(supabase_url, service_role_key)
-
-        _log(log_callback, f"🗑  Deleting existing debtor data from fin_parties…")
-        sb.table("fin_parties").delete().eq("party_type", party_type).execute()
-
-        _log(log_callback, f"🗑  Deleting existing debtor data from fin_ledger…")
-        sb.table("fin_ledger").delete().eq("party_type", party_type).execute()
-
-        _log(log_callback, f"🗑  Deleting existing debtor data from fin_outstanding…")
-        sb.table("fin_outstanding").delete().eq("party_type", party_type).execute()
-
-        _log(log_callback, f"📤 Inserting {len(summary_parties)} parties…")
-        _insert_chunks(sb, "fin_parties", summary_parties, log_callback)
-
-        _log(log_callback, f"📤 Inserting {len(ledger_rows)} ledger rows…")
-        _insert_chunks(sb, "fin_ledger", ledger_rows, log_callback)
-
-        if outstanding_rows:
-            _log(log_callback, f"📤 Inserting {len(outstanding_rows)} outstanding rows…")
-            _insert_chunks(sb, "fin_outstanding", outstanding_rows, log_callback)
-        else:
-            _log(log_callback, "  (No outstanding rows to insert — all debtors settled.)")
-
-        # ── Sync log ──────────────────────────────────────────────────────
-        sb.table("fin_sync_log").insert({
-            "file_type": "debtors",
-            "row_count": len(ledger_rows),
-            "party_count": len(summary_parties),
-            "status": "success",
-        }).execute()
-
-        elapsed = time.time() - t_start
-        msg = (
-            f"✅ Debtors synced — {len(summary_parties)} parties, "
-            f"{len(ledger_rows)} ledger rows, "
-            f"{len(outstanding_rows)} outstanding rows "
-            f"({elapsed:.1f}s)"
+        return _push_parsed_data(
+            party_type, summary_parties, ledger_rows, outstanding_rows,
+            supabase_url, service_role_key, log_callback, t_start,
         )
-        _log(log_callback, msg)
-        return True, msg
 
     except Exception as exc:
         msg = f"❌ Debtors sync failed: {exc}"
@@ -427,7 +470,7 @@ def sync_creditors(
     log_callback=None,
 ) -> tuple[bool, str]:
     """
-    Parse Sundry Creditors Excel and push to Supabase.
+    Parse Sundry Creditors Excel (analyser output) and push to Supabase.
     Returns (success: bool, summary_message: str).
     """
     t_start = time.time()
@@ -458,46 +501,10 @@ def sync_creditors(
         _log(log_callback, "🔍 Cross-validating parties vs ledger…")
         _cross_validate(summary_parties, ledger_rows, log_callback)
 
-        _log(log_callback, "🔌 Connecting to Supabase…")
-        sb = _admin_client(supabase_url, service_role_key)
-
-        _log(log_callback, "🗑  Deleting existing creditor data from fin_parties…")
-        sb.table("fin_parties").delete().eq("party_type", party_type).execute()
-
-        _log(log_callback, "🗑  Deleting existing creditor data from fin_ledger…")
-        sb.table("fin_ledger").delete().eq("party_type", party_type).execute()
-
-        _log(log_callback, "🗑  Deleting existing creditor data from fin_outstanding…")
-        sb.table("fin_outstanding").delete().eq("party_type", party_type).execute()
-
-        _log(log_callback, f"📤 Inserting {len(summary_parties)} parties…")
-        _insert_chunks(sb, "fin_parties", summary_parties, log_callback)
-
-        _log(log_callback, f"📤 Inserting {len(ledger_rows)} ledger rows…")
-        _insert_chunks(sb, "fin_ledger", ledger_rows, log_callback)
-
-        if outstanding_rows:
-            _log(log_callback, f"📤 Inserting {len(outstanding_rows)} outstanding rows…")
-            _insert_chunks(sb, "fin_outstanding", outstanding_rows, log_callback)
-        else:
-            _log(log_callback, "  (No outstanding rows to insert — all creditors settled.)")
-
-        sb.table("fin_sync_log").insert({
-            "file_type": "creditors",
-            "row_count": len(ledger_rows),
-            "party_count": len(summary_parties),
-            "status": "success",
-        }).execute()
-
-        elapsed = time.time() - t_start
-        msg = (
-            f"✅ Creditors synced — {len(summary_parties)} parties, "
-            f"{len(ledger_rows)} ledger rows, "
-            f"{len(outstanding_rows)} outstanding rows "
-            f"({elapsed:.1f}s)"
+        return _push_parsed_data(
+            party_type, summary_parties, ledger_rows, outstanding_rows,
+            supabase_url, service_role_key, log_callback, t_start,
         )
-        _log(log_callback, msg)
-        return True, msg
 
     except Exception as exc:
         msg = f"❌ Creditors sync failed: {exc}"
@@ -668,3 +675,115 @@ def preview_address_book(excel_path: str) -> int | None:
         return count
     except Exception:
         return None
+
+
+def push_analysed_data(
+    party_type: str,
+    vendor_data: dict,
+    supabase_url: str,
+    service_role_key: str,
+    log_callback=None,
+) -> tuple[bool, str]:
+    """
+    Convert vendor_data produced by the Sundry Analyser engine directly into
+    the three row-sets (fin_parties, fin_ledger, fin_outstanding) and push to
+    Supabase — no intermediate xlsx file needed.
+
+    vendor_data: the dict returned by processor.run_fifo_matching()
+        {party_name: {opening, stated_closing, computed_closing, transactions,
+                      running_balances, fifo_items, fifo_pattern,
+                      vendor_summary_sentence, ...}}
+    party_type: 'debtor' or 'creditor'
+    """
+    import time as _time
+    t_start = _time.time()
+
+    try:
+        summary_parties = []
+        ledger_rows = []
+        outstanding_rows = []
+
+        for party_name, data in vendor_data.items():
+            opening_bal = data.get("opening", 0.0) or 0.0
+            closing_bal = data.get("computed_closing", 0.0) or 0.0
+
+            # Status label (mirrors writer.py logic)
+            if closing_bal > 0.5:
+                status = "Receivable" if party_type == "debtor" else "Payable"
+            elif closing_bal < -0.5:
+                status = "Credit Bal ⚠" if party_type == "debtor" else "Overpaid ⚠"
+            else:
+                status = "Settled ✓"
+
+            summary_parties.append({
+                "party_type": party_type,
+                "party_name": party_name,
+                "opening_bal": round(opening_bal, 2),
+                "closing_bal": round(closing_bal, 2),
+                "status": status,
+            })
+
+            # Ledger rows — opening balance row + transactions
+            balances = data.get("running_balances", [])
+            for i, (dt, vt, vno, nar, deb, cre) in enumerate(data.get("transactions", [])):
+                rb = balances[i] if i < len(balances) else 0.0
+                ledger_rows.append({
+                    "party_type": party_type,
+                    "party_name": party_name,
+                    "txn_date": dt.strftime("%Y-%m-%d") if hasattr(dt, "strftime") else (
+                        dt.date().isoformat() if hasattr(dt, "date") else str(dt) if dt else None
+                    ),
+                    "vch_type": str(vt).strip() if vt else None,
+                    "vch_no": str(vno).strip() if vno else None,
+                    "narration": str(nar).strip() if nar else None,
+                    "debit": float(deb) if deb else 0.0,
+                    "credit": float(cre) if cre else 0.0,
+                    "balance": round(rb, 2),
+                })
+
+            # Outstanding rows from FIFO items
+            fifo_items = data.get("fifo_items") or []
+            seq = 0
+            for item in fifo_items:
+                remaining = round(item["original"] - item["consumed"], 2)
+                if remaining <= 0.01:
+                    continue
+                seq += 1
+                d = item.get("date")
+                inv_date = None
+                if d is not None:
+                    try:
+                        inv_date = d.date().isoformat() if hasattr(d, "date") else str(d)
+                    except Exception:
+                        inv_date = str(d)
+
+                outstanding_rows.append({
+                    "party_type": party_type,
+                    "party_name": party_name,
+                    "inv_date": inv_date,
+                    "vch_type": str(item.get("vch_type", "")).strip() or None,
+                    "vch_no": str(item.get("vch_no", "")).strip() or None,
+                    "original_amt": round(item["original"], 2),
+                    "paid_amt": round(item["consumed"], 2),
+                    "remaining": remaining,
+                    "reason": item.get("reason_text", "") or None,
+                })
+
+        _log(log_callback, f"  → Built {len(summary_parties)} parties, "
+                           f"{len(ledger_rows)} ledger rows, "
+                           f"{len(outstanding_rows)} outstanding rows from analysis.")
+
+        _log(log_callback, "🔍 Cross-validating parties vs ledger…")
+        _cross_validate(summary_parties, ledger_rows, log_callback)
+
+        return _push_parsed_data(
+            party_type, summary_parties, ledger_rows, outstanding_rows,
+            supabase_url, service_role_key, log_callback, t_start,
+        )
+
+    except Exception as exc:
+        import traceback
+        msg = f"❌ Push failed: {exc}"
+        _log(log_callback, msg)
+        _log(log_callback, traceback.format_exc())
+        return False, msg

@@ -289,6 +289,8 @@ export default function AdminLedger() {
   const sc = STATUS_COLOURS[party?.status] ?? { color: 'var(--text-muted)', bg: 'var(--bg-elevated)' }
   const bal = party?.closing_bal ?? 0
   const balFormatted = bal < 0 ? `−${fmt(bal)}` : fmt(bal)
+  const openingBal = party?.opening_bal ?? 0
+  const openingBalFormatted = openingBal < 0 ? `−${fmt(openingBal)}` : fmt(openingBal)
 
   // Label display
   const sys = SYSTEM_LABELS.find(l => l.key === partyLabelKey)
@@ -482,6 +484,15 @@ export default function AdminLedger() {
               {balFormatted}
             </span>
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>closing balance</span>
+
+            <span className="text-xs px-0.5" style={{ color: 'var(--border-strong)' }}>·</span>
+            <span
+              className="font-mono font-medium text-sm"
+              style={{ color: openingBal < 0 ? 'var(--error)' : 'var(--text-muted)' }}
+            >
+              {openingBalFormatted}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>opening balance</span>
 
             {/* Label pill */}
             <div className="relative ml-auto">

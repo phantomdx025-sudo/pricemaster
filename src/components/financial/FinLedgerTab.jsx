@@ -196,6 +196,8 @@ export default function FinLedgerTab({
   const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768
   const showTable = isLandscape || isDesktop
 
+  const openingBal = party?.opening_bal ?? 0
+
   return (
     <>
       {/* Desktop table — shown always on desktop OR when landscape on mobile */}
@@ -212,11 +214,22 @@ export default function FinLedgerTab({
             </tr>
           </thead>
           <tbody>
+            {/* Opening Balance row */}
+            <tr style={{ background: 'var(--brand-light)', borderBottom: '1px solid var(--border)' }}>
+              <td className="px-2 py-2.5 text-xs font-mono whitespace-nowrap" style={{ color: 'var(--text-muted)', width: '14%' }}>—</td>
+              <td className="px-2 py-2.5 text-xs font-semibold" style={{ color: 'var(--brand)', width: '22%' }} colSpan={2}>Opening Balance</td>
+              <td className="px-2 py-2.5 text-xs" style={{ width: '18%' }}></td>
+              <td className="px-2 py-2.5 text-xs" style={{ width: '15%' }}></td>
+              <td className="px-2 py-2.5 text-xs font-mono text-right font-semibold"
+                style={{ color: openingBal < 0 ? 'var(--error)' : 'var(--brand)', width: '16%' }}>
+                {openingBal < 0 ? `−${fmt(openingBal)}` : fmt(openingBal)}
+              </td>
+            </tr>
             {rows.map((row, i) => (
               <LedgerRow
                 key={row.id ?? i}
                 row={row}
-                highlighted={i === 0 || i === rows.length - 1}
+                highlighted={i === rows.length - 1}
               />
             ))}
           </tbody>
@@ -225,6 +238,17 @@ export default function FinLedgerTab({
 
       {/* Mobile cards — hidden when showTable */}
       <div className={showTable ? 'hidden' : 'block'}>
+        {/* Opening Balance card */}
+        <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--brand-light)' }}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold" style={{ color: 'var(--brand)' }}>Opening Balance</span>
+            <span className="text-xs font-mono font-semibold"
+              style={{ color: openingBal < 0 ? 'var(--error)' : 'var(--brand)' }}>
+              {openingBal < 0 ? `−${fmt(openingBal)}` : fmt(openingBal)}
+            </span>
+          </div>
+        </div>
+
         {/* AX-3: Narration toggle — shown above the list, unobtrusive */}
         {hasAnyNarration && (
           <div
@@ -245,7 +269,7 @@ export default function FinLedgerTab({
           <LedgerCard
             key={row.id ?? i}
             row={row}
-            highlighted={i === 0 || i === rows.length - 1}
+            highlighted={i === rows.length - 1}
             showNarrations={showNarrations}
           />
         ))}

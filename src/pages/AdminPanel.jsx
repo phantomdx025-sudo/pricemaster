@@ -63,7 +63,7 @@ export default function AdminPanel() {
       {/* ── Mobile top header ────────────────────────────── */}
       <header
         className="md:hidden flex items-center justify-between px-4 py-3 flex-shrink-0"
-        style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)' }}
+        style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)', paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="flex items-center gap-2">
           {/* BX-5: Hamburger button — replaces the old logo-only left side */}
