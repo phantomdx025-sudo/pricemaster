@@ -6,7 +6,7 @@
  *   instead of opening FinSlideOver. FinSlideOver.jsx is kept but not used here.
  */
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { TrendingUp, AlertTriangle, RefreshCw, Search } from 'lucide-react'
 import { useFinancial } from '../hooks/useFinancial'
 import FinPartyList      from '../components/financial/FinPartyList'
@@ -52,7 +52,6 @@ function ErrorState({ message, onRetry }) {
 
 export default function AdminFinancialContent() {
   const navigate = useNavigate()
-  const location = useLocation()
   const fin = useFinancial()
   const {
     debtors, creditors, addressMap, syncLog, pinned,
@@ -131,7 +130,7 @@ export default function AdminFinancialContent() {
     setSearchOpen(false)
     const type = party.party_type
     const name = encodeURIComponent(party.party_name)
-    navigate(`/admin/financial/ledger/${type}/${name}`, { state: { from: location.pathname } })
+    navigate(`/admin/financial/ledger/${type}/${name}`, { state: { section: 'financial' } })
   }, [navigate])
 
   // Keeps label maps in sync when labels are changed from the party list

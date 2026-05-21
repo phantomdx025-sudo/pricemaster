@@ -130,11 +130,11 @@ export default function AdminLedger() {
   const list = partyType === 'creditor' ? creditors : debtors
   const party = list.find(p => p.party_name === decodedName) ?? null
 
-  // Back navigation — return to the exact page that opened this ledger.
-  // Each navigate() to the ledger passes state: { from: location.pathname },
-  // so we always land back on the right page (Financial, Reports, etc.).
-  const from = location.state?.from ?? '/admin/financial'
-  const handleBack = () => navigate(from)
+  // Back navigation — return to the section that opened this ledger.
+  // Each navigate() to the ledger passes state: { section: 'financial'|'reports' }.
+  // We pass that back to AdminPanel via state so it restores the correct section.
+  const fromSection = location.state?.section ?? 'financial'
+  const handleBack = () => navigate('/admin', { state: { section: fromSection } })
 
   // ── PDF helpers ─────────────────────────────────────────────────────────────
   const buildPDF = useCallback(async () => {
