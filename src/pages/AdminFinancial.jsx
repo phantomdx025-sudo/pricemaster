@@ -86,12 +86,12 @@ export default function AdminFinancialContent() {
     }
   }, [])
 
-  // Restore scroll only after the list has content AND this component's container
-  // is actually in the DOM. The containerRef guard prevents this from firing on
-  // other pages (e.g. Catalogue) that happen to share the same hook state.
+  // Restore scroll once the active list has content.
+  // No containerRef guard here — requestAnimationFrame defers the actual
+  // scrollTop assignment until after paint, by which point containerRef.current
+  // is always set. The scrollRestored flag ensures this only fires once per mount.
   useEffect(() => {
     if (scrollRestored.current) return
-    if (!containerRef.current) return   // not our page — bail
     const saved = sessionStorage.getItem('fin_scroll')
     if (!saved) return
     const parties = activeTab === 'debtors' ? debtors : creditors

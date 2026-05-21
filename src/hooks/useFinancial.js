@@ -16,15 +16,19 @@ const cache = {
 }
 
 export function useFinancial() {
-  const [debtors,    setDebtors]    = useState([])
-  const [creditors,  setCreditors]  = useState([])
-  const [addressMap, setAddressMap] = useState(new Map())
-  const [syncLog,    setSyncLog]    = useState([])
-  const [pinned,     setPinned]     = useState(new Set())
+  // Seed state directly from module-level cache if available.
+  // This means on re-mount (e.g. navigating back from ledger) the very first
+  // render already has data — no flash of "No financial data synced yet".
+  const [debtors,    setDebtors]    = useState(() => cache.parties?.debtor   ?? [])
+  const [creditors,  setCreditors]  = useState(() => cache.parties?.creditor ?? [])
+  const [addressMap, setAddressMap] = useState(() => cache.address  ?? new Map())
+  const [syncLog,    setSyncLog]    = useState(() => cache.syncLog  ?? [])
+  const [pinned,     setPinned]     = useState(() => cache.pinned   ?? new Set())
 
-  const [loadingParties, setLoadingParties] = useState(false)
-  const [loadingAddress, setLoadingAddress] = useState(false)
-  const [loadingSync,    setLoadingSync]    = useState(false)
+  // If cache already has data, don't show loading on re-mount
+  const [loadingParties, setLoadingParties] = useState(() => !cache.parties)
+  const [loadingAddress, setLoadingAddress] = useState(() => !cache.address)
+  const [loadingSync,    setLoadingSync]    = useState(() => !cache.syncLog)
   const [error, setError] = useState(null)
 
   const fetchParties = useCallback(async () => {
