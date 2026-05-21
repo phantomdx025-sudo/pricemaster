@@ -35,19 +35,29 @@ export function useFinancial() {
     }
     setLoadingParties(true)
     setError(null)
-    const { data, error: err } = await supabase
-      .from('fin_parties')
-      .select('*')
-      .order('party_name')
-    setLoadingParties(false)
-    if (err) {
-      setError(err.message)
-      return { debtor: [], creditor: [] }
+    // Paginate to bypass Supabase's 1,000-row default limit
+    const PAGE = 1000
+    let allRows = []
+    let from = 0
+    while (true) {
+      const { data, error: err } = await supabase
+        .from('fin_parties')
+        .select('*')
+        .order('party_name')
+        .range(from, from + PAGE - 1)
+      if (err) {
+        setLoadingParties(false)
+        setError(err.message)
+        return { debtor: [], creditor: [] }
+      }
+      allRows = allRows.concat(data ?? [])
+      if ((data ?? []).length < PAGE) break
+      from += PAGE
     }
-    const rows = data ?? []
+    setLoadingParties(false)
     const result = {
-      debtor:   rows.filter(r => r.party_type === 'debtor'),
-      creditor: rows.filter(r => r.party_type === 'creditor'),
+      debtor:   allRows.filter(r => r.party_type === 'debtor'),
+      creditor: allRows.filter(r => r.party_type === 'creditor'),
     }
     cache.parties = result
     setDebtors(result.debtor)
@@ -61,16 +71,27 @@ export function useFinancial() {
       return cache.address
     }
     setLoadingAddress(true)
-    const { data, error: err } = await supabase
-      .from('fin_address')
-      .select('*')
-    setLoadingAddress(false)
-    if (err) {
-      if (import.meta.env.DEV) console.warn('useFinancial fetchAddress:', err.message)
-      return new Map()
+    // Paginate to bypass Supabase's 1,000-row default limit
+    const PAGE = 1000
+    let allRows = []
+    let from = 0
+    while (true) {
+      const { data, error: err } = await supabase
+        .from('fin_address')
+        .select('*')
+        .range(from, from + PAGE - 1)
+      if (err) {
+        setLoadingAddress(false)
+        if (import.meta.env.DEV) console.warn('useFinancial fetchAddress:', err.message)
+        return new Map()
+      }
+      allRows = allRows.concat(data ?? [])
+      if ((data ?? []).length < PAGE) break
+      from += PAGE
     }
+    setLoadingAddress(false)
     const map = new Map()
-    ;(data ?? []).forEach(row => {
+    allRows.forEach(row => {
       map.set(row.party_name.trim().toLowerCase(), row)
     })
     cache.address = map
