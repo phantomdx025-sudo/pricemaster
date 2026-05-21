@@ -1,5 +1,5 @@
 /**
- * FinPartyCard — one row/card per party in the Financial Reports list.
+ * FinPartyCard — one row/card per party in the Financial Reports list. heheheheh
  * Mobile: full-width card layout.
  * Desktop: table-row style with more columns visible.
  * Phase FIN-6 (corrected): shows party-level label pill; tapping it calls onLabelClick(party).
