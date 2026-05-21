@@ -6,7 +6,7 @@
  *   instead of opening FinSlideOver. FinSlideOver.jsx is kept but not used here.
  */
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { TrendingUp, AlertTriangle, RefreshCw, Search } from 'lucide-react'
 import { useFinancial } from '../hooks/useFinancial'
 import FinPartyList      from '../components/financial/FinPartyList'
@@ -52,6 +52,7 @@ function ErrorState({ message, onRetry }) {
 
 export default function AdminFinancialContent() {
   const navigate = useNavigate()
+  const location = useLocation()
   const fin = useFinancial()
   const {
     debtors, creditors, addressMap, syncLog, pinned,
@@ -70,39 +71,34 @@ export default function AdminFinancialContent() {
     sessionStorage.setItem('fin_tab', val)
   }
 
-  // BX-3: Scroll persistence
+  // BX-3: Scroll — scroll the last-opened party card into view on return.
+  // Only fires when returning from a ledger opened via the Financial page
+  // (location.state.section === 'financial'). Reports → ledger → back is unaffected.
   const containerRef = useRef(null)
   const scrollRestored = useRef(false)
 
-  // Save scroll position on unmount; also reset scrollRestored so it works
-  // correctly if the user navigates away and comes back.
   useEffect(() => {
-    scrollRestored.current = false
-    return () => {
-      if (containerRef.current) {
-        sessionStorage.setItem('fin_scroll', String(containerRef.current.scrollTop))
-      }
-      scrollRestored.current = false
-    }
-  }, [])
-
-  // Restore scroll once the active list has content.
-  // No containerRef guard here — requestAnimationFrame defers the actual
-  // scrollTop assignment until after paint, by which point containerRef.current
-  // is always set. The scrollRestored flag ensures this only fires once per mount.
-  useEffect(() => {
+    // Only restore when coming back from a Financial-page ledger
+    if (location.state?.section !== 'financial') return
     if (scrollRestored.current) return
-    const saved = sessionStorage.getItem('fin_scroll')
-    if (!saved) return
+
+    const lastParty = sessionStorage.getItem('fin_last_party')
+    if (!lastParty) return
+
     const parties = activeTab === 'debtors' ? debtors : creditors
-    if (parties.length === 0) return    // wait until list has content
+    if (parties.length === 0) return   // wait for list to render
+
     scrollRestored.current = true
+    // Clear so it doesn't re-fire on next visit
+    sessionStorage.removeItem('fin_last_party')
+
     requestAnimationFrame(() => {
-      if (containerRef.current) {
-        containerRef.current.scrollTop = parseInt(saved, 10)
+      const el = document.querySelector(`[data-party-key="${CSS.escape(lastParty)}"]`)
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'instant' })
       }
     })
-  }, [debtors, creditors, activeTab])
+  }, [debtors, creditors, activeTab, location.state])
   const [debtorLabelMap,  setDebtorLabelMap]  = useState(new Map())
   const [creditorLabelMap,setCreditorLabelMap]= useState(new Map())
   const [searchOpen,      setSearchOpen]      = useState(false)
@@ -125,9 +121,11 @@ export default function AdminFinancialContent() {
     loadAll()
   }
 
-  // AX-3: Navigate to full-page ledger instead of opening slide-over
+  // AX-3: Navigate to full-page ledger instead of opening slide-over.
+  // Save the party key so we can scroll back to it on return.
   const handlePartyClick = useCallback((party) => {
     setSearchOpen(false)
+    sessionStorage.setItem('fin_last_party', `${party.party_type}:${party.party_name}`)
     const type = party.party_type
     const name = encodeURIComponent(party.party_name)
     navigate(`/admin/financial/ledger/${type}/${name}`, { state: { section: 'financial' } })

@@ -89,6 +89,7 @@ export default function FinPartyCard({
   return (
     <button
       onClick={onClick}
+      data-party-key={`${party.party_type}:${party.party_name}`}
       className="w-full text-left transition-colors hover:opacity-90 active:opacity-75 animate-fade-in"
       style={{
         borderBottom: '1px solid var(--border)',
