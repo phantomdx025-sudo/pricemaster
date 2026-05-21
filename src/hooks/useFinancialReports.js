@@ -17,20 +17,27 @@ export function useFinancialReports() {
    * NOTE: Always uses a date range — never fetches unfiltered.
    */
   const fetchPeriodSummary = useCallback(async (from, to) => {
-    const { data, error } = await supabase
-      .from('fin_ledger')
-      .select('party_name, party_type, txn_date, debit, credit, vch_type, vch_no, balance')
-      .gte('txn_date', from)
-      .lte('txn_date', to)
-      .order('txn_date', { ascending: true })
-      .order('id', { ascending: true })
-
-    if (error) throw new Error(error.message)
-
-    const rows = data ?? []
+    // Paginate to bypass Supabase's 1,000-row default limit
+    const PAGE = 1000
+    let allRows = []
+    let offset = 0
+    while (true) {
+      const { data, error } = await supabase
+        .from('fin_ledger')
+        .select('party_name, party_type, txn_date, debit, credit, vch_type, vch_no, balance')
+        .gte('txn_date', from)
+        .lte('txn_date', to)
+        .order('txn_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + PAGE - 1)
+      if (error) throw new Error(error.message)
+      allRows = allRows.concat(data ?? [])
+      if ((data ?? []).length < PAGE) break
+      offset += PAGE
+    }
     return {
-      debtorRows:   rows.filter(r => r.party_type === 'debtor'),
-      creditorRows: rows.filter(r => r.party_type === 'creditor'),
+      debtorRows:   allRows.filter(r => r.party_type === 'debtor'),
+      creditorRows: allRows.filter(r => r.party_type === 'creditor'),
     }
   }, [])
 
@@ -121,17 +128,25 @@ export function useFinancialReports() {
    * Returns { debtorRows: [], creditorRows: [] }
    */
   const fetchAllLedger = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('fin_ledger')
-      .select('party_name, party_type, txn_date, debit, credit, vch_type, vch_no, balance')
-      .order('txn_date', { ascending: true })
-      .order('id',       { ascending: true })
-
-    if (error) throw new Error(error.message)
-    const rows = data ?? []
+    // Paginate to bypass Supabase's 1,000-row default limit
+    const PAGE = 1000
+    let allRows = []
+    let offset = 0
+    while (true) {
+      const { data, error } = await supabase
+        .from('fin_ledger')
+        .select('party_name, party_type, txn_date, debit, credit, vch_type, vch_no, balance')
+        .order('txn_date', { ascending: true })
+        .order('id',       { ascending: true })
+        .range(offset, offset + PAGE - 1)
+      if (error) throw new Error(error.message)
+      allRows = allRows.concat(data ?? [])
+      if ((data ?? []).length < PAGE) break
+      offset += PAGE
+    }
     return {
-      debtorRows:   rows.filter(r => r.party_type === 'debtor'),
-      creditorRows: rows.filter(r => r.party_type === 'creditor'),
+      debtorRows:   allRows.filter(r => r.party_type === 'debtor'),
+      creditorRows: allRows.filter(r => r.party_type === 'creditor'),
     }
   }, [])
 
