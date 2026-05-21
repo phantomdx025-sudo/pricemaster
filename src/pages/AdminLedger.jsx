@@ -11,7 +11,7 @@
  * Reuses FinLedgerTab, FinOutstandingTab, FinContactTab, FinInsightsTab exactly.
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   ArrowLeft, Star, Share2, Download, MessageCircle, Mail, Printer,
   Loader2, BookOpen, AlertCircle, Phone, BarChart2, Tag,
@@ -48,6 +48,7 @@ const TABS = [
 export default function AdminLedger() {
   const { partyType, partyName } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const decodedName = decodeURIComponent(partyName ?? '')
 
@@ -129,14 +130,11 @@ export default function AdminLedger() {
   const list = partyType === 'creditor' ? creditors : debtors
   const party = list.find(p => p.party_name === decodedName) ?? null
 
-  // Back navigation — go to previous page in history (Reports, Financial, wherever)
-  const handleBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1)
-    } else {
-      navigate('/admin', { state: { section: 'financial' } })
-    }
-  }
+  // Back navigation — return to the exact page that opened this ledger.
+  // Each navigate() to the ledger passes state: { from: location.pathname },
+  // so we always land back on the right page (Financial, Reports, etc.).
+  const from = location.state?.from ?? '/admin/financial'
+  const handleBack = () => navigate(from)
 
   // ── PDF helpers ─────────────────────────────────────────────────────────────
   const buildPDF = useCallback(async () => {

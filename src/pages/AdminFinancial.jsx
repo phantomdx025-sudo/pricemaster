@@ -6,7 +6,7 @@
  *   instead of opening FinSlideOver. FinSlideOver.jsx is kept but not used here.
  */
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { TrendingUp, AlertTriangle, RefreshCw, Search } from 'lucide-react'
 import { useFinancial } from '../hooks/useFinancial'
 import FinPartyList      from '../components/financial/FinPartyList'
@@ -52,6 +52,7 @@ function ErrorState({ message, onRetry }) {
 
 export default function AdminFinancialContent() {
   const navigate = useNavigate()
+  const location = useLocation()
   const fin = useFinancial()
   const {
     debtors, creditors, addressMap, syncLog, pinned,
@@ -74,24 +75,28 @@ export default function AdminFinancialContent() {
   const containerRef = useRef(null)
   const scrollRestored = useRef(false)
 
-  // Save scroll position on unmount
+  // Save scroll position on unmount; also reset scrollRestored so it works
+  // correctly if the user navigates away and comes back.
   useEffect(() => {
+    scrollRestored.current = false
     return () => {
       if (containerRef.current) {
         sessionStorage.setItem('fin_scroll', String(containerRef.current.scrollTop))
       }
+      scrollRestored.current = false
     }
   }, [])
 
-  // Restore scroll position only after the list has actually rendered with content.
-  // Restoring on mount fires too early — the party cards aren't in the DOM yet so
-  // scrollTop has nothing to scroll into and snaps back to 0.
+  // Restore scroll only after the list has content AND this component's container
+  // is actually in the DOM. The containerRef guard prevents this from firing on
+  // other pages (e.g. Catalogue) that happen to share the same hook state.
   useEffect(() => {
     if (scrollRestored.current) return
+    if (!containerRef.current) return   // not our page — bail
     const saved = sessionStorage.getItem('fin_scroll')
     if (!saved) return
     const parties = activeTab === 'debtors' ? debtors : creditors
-    if (parties.length === 0) return  // wait until list has content
+    if (parties.length === 0) return    // wait until list has content
     scrollRestored.current = true
     requestAnimationFrame(() => {
       if (containerRef.current) {
@@ -126,7 +131,7 @@ export default function AdminFinancialContent() {
     setSearchOpen(false)
     const type = party.party_type
     const name = encodeURIComponent(party.party_name)
-    navigate(`/admin/financial/ledger/${type}/${name}`)
+    navigate(`/admin/financial/ledger/${type}/${name}`, { state: { from: location.pathname } })
   }, [navigate])
 
   // Keeps label maps in sync when labels are changed from the party list

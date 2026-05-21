@@ -20,7 +20,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   BarChart2, TrendingUp, ArrowDownCircle, ShoppingBag,
   Package, ArrowUpCircle, AlertCircle, AlertTriangle,
@@ -393,7 +393,7 @@ function TopDebtorsList({ debtorOutstandingList, navigate }) {
                       {idx + 1}.
                     </span>
                     <button
-                      onClick={() => navigate(`/admin/financial/ledger/debtor/${encodeURIComponent(party.party_name)}`)}
+                      onClick={() => navigate(`/admin/financial/ledger/debtor/${encodeURIComponent(party.party_name)}`, { state: { from: location.pathname } })}
                       className="text-xs font-medium truncate text-left hover:underline"
                       style={{ color: 'var(--brand)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                     >
@@ -492,6 +492,7 @@ function OverviewTab({ debtorRows, creditorRows, outstanding, debtorOutstandingL
   )
 
   const navigate  = useNavigate()
+  const location = useLocation()
   const chartRows = chartType === 'debtors' ? debtorRows : creditorRows
 
   if (loading) {
@@ -744,6 +745,7 @@ function getMostActiveMonth(rows) {
 // BX-10E: Export CSV button
 function PeriodBreakdownTab({ debtorRows, creditorRows, loading }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [tab, setTab] = useState('debtors')
   const [query, setQuery] = useState('')
   const [sortKey, setSortKey] = useState('party_name')
@@ -775,7 +777,7 @@ function PeriodBreakdownTab({ debtorRows, creditorRows, loading }) {
   // BX-2: Navigate to ledger for party
   function goToLedger(partyName) {
     const partyType = tab === 'debtors' ? 'debtor' : 'creditor'
-    navigate(`/admin/financial/ledger/${partyType}/${encodeURIComponent(partyName)}`)
+    navigate(`/admin/financial/ledger/${partyType}/${encodeURIComponent(partyName)}`, { state: { from: location.pathname } })
   }
 
   // BX-10D: Most active month from the raw rows of the current tab

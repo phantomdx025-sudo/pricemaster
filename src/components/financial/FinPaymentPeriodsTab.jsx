@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   ChevronDown, ChevronUp, Clock, AlertTriangle,
   ArrowDownUp, Users, Building2, RefreshCw,
@@ -204,6 +204,7 @@ function PartyCard({ entry, onNameClick }) {
 export default function FinPaymentPeriodsTab() {
   const { fetchLastPayments, fetchOutstandingPerParty } = useFinancialReports()
   const navigate = useNavigate() // BX-2: for tappable party names
+  const location = useLocation()
 
   // AX-5: Landscape detection for layout adaptation
   const [isLandscape, setIsLandscape] = useState(
@@ -608,7 +609,7 @@ export default function FinPaymentPeriodsTab() {
                       <td style={tdLeftStyle}>
                         {/* BX-2: Tappable party name */}
                         <button
-                          onClick={() => navigate(`/admin/financial/ledger/${partyType}/${encodeURIComponent(e.party_name)}`)}
+                          onClick={() => navigate(`/admin/financial/ledger/${partyType}/${encodeURIComponent(e.party_name)}`, { state: { from: location.pathname } })}
                           className="font-medium text-left hover:underline transition-colors"
                           style={{ color: 'var(--brand)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
                         >
@@ -654,7 +655,7 @@ export default function FinPaymentPeriodsTab() {
           {/* ── Mobile cards ──────────────────────────────────────── */}
           <div className={showTable ? 'hidden' : 'flex flex-col gap-2'}>
             {displayed.map(e => (
-              <PartyCard key={e.party_name} entry={e} onNameClick={(name) => navigate(`/admin/financial/ledger/${partyType}/${encodeURIComponent(name)}`)} />
+              <PartyCard key={e.party_name} entry={e} onNameClick={(name) => navigate(`/admin/financial/ledger/${partyType}/${encodeURIComponent(name)}`, { state: { from: location.pathname } })} />
             ))}
           </div>
         </>
