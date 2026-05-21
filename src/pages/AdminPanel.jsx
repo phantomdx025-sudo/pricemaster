@@ -59,7 +59,7 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col" style={{ background: 'var(--bg-base)' }}>
+    <div className="h-dvh flex flex-col overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       {/* ── Mobile top header ────────────────────────────── */}
       <header
         className="md:hidden flex items-center justify-between px-4 py-3 flex-shrink-0"

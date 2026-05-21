@@ -393,7 +393,7 @@ function TopDebtorsList({ debtorOutstandingList, navigate }) {
                       {idx + 1}.
                     </span>
                     <button
-                      onClick={() => navigate(`/admin/financial/ledger/debtor/${encodeURIComponent(party.party_name)}`, { state: { section: 'reports' } })}
+                      onClick={() => navigate(`/admin/financial/ledger/debtor/${encodeURIComponent(party.party_name)}`)}
                       className="text-xs font-medium truncate text-left hover:underline"
                       style={{ color: 'var(--brand)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                     >
@@ -775,7 +775,7 @@ function PeriodBreakdownTab({ debtorRows, creditorRows, loading }) {
   // BX-2: Navigate to ledger for party
   function goToLedger(partyName) {
     const partyType = tab === 'debtors' ? 'debtor' : 'creditor'
-    navigate(`/admin/financial/ledger/${partyType}/${encodeURIComponent(partyName)}`, { state: { section: 'reports' } })
+    navigate(`/admin/financial/ledger/${partyType}/${encodeURIComponent(partyName)}`)
   }
 
   // BX-10D: Most active month from the raw rows of the current tab
@@ -1062,7 +1062,9 @@ export default function AdminReports() {
   const [error,        setError]        = useState(null)
   const [loaded,       setLoaded]       = useState(false)
 
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(
+    () => sessionStorage.getItem('reports_tab') ?? 'overview'
+  )
 
   // ── Fetch functions ───────────────────────────────────────────────────
   const load = useCallback(async (fromDate, toDate) => {
@@ -1218,7 +1220,7 @@ export default function AdminReports() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => { setActiveTab(tab.id); sessionStorage.setItem('reports_tab', tab.id) }}
                   className="px-4 py-2.5 text-sm font-medium transition-colors"
                   style={{
                     color:        isActive ? 'var(--brand)' : 'var(--text-muted)',
