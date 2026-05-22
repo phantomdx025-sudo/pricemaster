@@ -40,6 +40,11 @@ DEFAULT_CONFIG = {
     "fin_address_path": "",
     "sa_debtors_path": "",
     "sa_creditors_path": "",
+    # Incremental Period Merge paths
+    "sa_debtors_master_path": "",    # path to master analysed debtors .xlsx
+    "sa_creditors_master_path": "",  # path to master analysed creditors .xlsx
+    "sa_debtors_period_path": "",    # path to period raw Tally export (debtors)
+    "sa_creditors_period_path": "",  # path to period raw Tally export (creditors)
 }
 
 def load_config() -> dict:

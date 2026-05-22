@@ -302,28 +302,41 @@ function computeMetrics(debtorRows, creditorRows, outstanding) {
   let totalTurnover    = 0
   let receivableCollected = 0
   let totalSales       = 0
+  let creditNoteTotal  = 0
   const debtorParties  = new Set()
 
   debtorRows.forEach(r => {
     const debit  = parseFloat(r.debit)  || 0
     const credit = parseFloat(r.credit) || 0
-    totalTurnover       += debit
+    const vt     = (r.vch_type ?? '').toLowerCase()
+    if (vt.includes('sales'))       totalTurnover += debit
+    if (vt.includes('sales'))       totalSales    += debit
+    if (vt.includes('credit note')) creditNoteTotal += credit
     receivableCollected += credit
-    if ((r.vch_type ?? '').toLowerCase().includes('sales')) totalSales += debit
     debtorParties.add(r.party_name)
   })
 
+  // Net sales = gross sales minus credit notes (sales returns)
+  totalTurnover = totalTurnover - creditNoteTotal
+  totalSales    = totalSales    - creditNoteTotal
+
   let totalPurchases   = 0
+  let debitNoteTotal   = 0
   let paidToCreditors  = 0
   const creditorParties = new Set()
 
   creditorRows.forEach(r => {
     const debit  = parseFloat(r.debit)  || 0
     const credit = parseFloat(r.credit) || 0
-    totalPurchases  += debit
-    paidToCreditors += credit
+    const vtc    = (r.vch_type ?? '').toLowerCase()
+    if (vtc.includes('purchase'))   totalPurchases += credit
+    if (vtc.includes('debit note')) debitNoteTotal += debit
+    paidToCreditors += debit
     creditorParties.add(r.party_name)
   })
+
+  // Net purchases = gross purchases minus debit notes (purchase returns)
+  totalPurchases = totalPurchases - debitNoteTotal
 
   return {
     totalTurnover,

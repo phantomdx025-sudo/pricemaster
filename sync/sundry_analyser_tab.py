@@ -31,6 +31,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 import fin_sync_core
+from merger import merge_period_into_master
 from parser import parse_workbook
 from processor import compute_running_balances, detect_anomalies, run_fifo_matching
 from writer import write_output_xlsx
@@ -73,6 +74,7 @@ class SundryAnalyserTab(ctk.CTkFrame):
 
         tab_as = self._inner_tabs.add("📊  Analyse & Sync")
         tab_ao = self._inner_tabs.add("💾  Analyse Only")
+        tab_im = self._inner_tabs.add("🔄  Incremental Merge")
 
         # ── Analyse & Sync sub-tab ────────────────────────────────────────
         tab_as.grid_columnconfigure(0, weight=1)
@@ -341,6 +343,9 @@ class SundryAnalyserTab(ctk.CTkFrame):
             height=180,
         )
         self._log_box.grid(row=1, column=0, sticky="nsew", pady=(4, 0))
+
+        # ── Incremental Merge sub-tab ─────────────────────────────────────────
+        self._build_im_tab(tab_im)
 
     # ── File-picker row builder ────────────────────────────────────────────────
 
@@ -800,5 +805,540 @@ class SundryAnalyserTab(ctk.CTkFrame):
                 self._busy = False
                 self._set_as_buttons_enabled(True)
                 self._log("─" * 52)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # INCREMENTAL MERGE — sub-tab builder
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _build_im_tab(self, tab_im):
+        """Build the 🔄 Incremental Merge sub-tab UI."""
+        tab_im.grid_columnconfigure(0, weight=1)
+
+        cfg = self._get_cfg()
+
+        # ── Description label ─────────────────────────────────────────────
+        ctk.CTkLabel(
+            tab_im,
+            text="Merge a short Tally period export (1–3 days) into an existing master.",
+            font=ctk.CTkFont(size=12),
+            text_color="gray",
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w", padx=18, pady=(14, 4))
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Section: Master Copy Paths
+        # ═════════════════════════════════════════════════════════════════════
+        ctk.CTkLabel(
+            tab_im, text="Master Copy Paths  (analysed .xlsx)",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).grid(row=1, column=0, sticky="w", padx=18, pady=(8, 2))
+
+        # Debtors master
+        self._im_deb_master_var, _ = self._make_master_file_row(
+            tab_im, row=2,
+            label="Debtors Master  (.xlsx — created by 'Analyse Only')",
+            config_key="sa_debtors_master_path",
+            current_val=cfg.get("sa_debtors_master_path", ""),
+            is_master=True,
+        )
+
+        # Creditors master
+        self._im_cred_master_var, _ = self._make_master_file_row(
+            tab_im, row=3,
+            label="Creditors Master  (.xlsx — created by 'Analyse Only')",
+            config_key="sa_creditors_master_path",
+            current_val=cfg.get("sa_creditors_master_path", ""),
+            is_master=True,
+        )
+
+        ctk.CTkLabel(
+            tab_im,
+            text="ℹ  Set once after a full Analyse Only run. Leave blank to run fresh.",
+            font=ctk.CTkFont(size=11),
+            text_color="gray",
+            anchor="w",
+        ).grid(row=4, column=0, sticky="w", padx=22, pady=(0, 6))
+
+        # Divider
+        ctk.CTkFrame(tab_im, height=1, fg_color="gray40").grid(
+            row=5, column=0, sticky="ew", padx=18, pady=(4, 8)
+        )
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Section: Period Export Paths
+        # ═════════════════════════════════════════════════════════════════════
+        ctk.CTkLabel(
+            tab_im, text="Period Export  (Tally — 1–3 day window)",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).grid(row=6, column=0, sticky="w", padx=18, pady=(0, 2))
+
+        # Debtors period file
+        self._im_deb_period_var, _ = self._make_master_file_row(
+            tab_im, row=7,
+            label="Debtors Period File  (.xls / .xlsx from Tally)",
+            config_key="sa_debtors_period_path",
+            current_val=cfg.get("sa_debtors_period_path", ""),
+            is_master=False,
+        )
+
+        # Creditors period file
+        self._im_cred_period_var, _ = self._make_master_file_row(
+            tab_im, row=8,
+            label="Creditors Period File  (.xls / .xlsx from Tally)",
+            config_key="sa_creditors_period_path",
+            current_val=cfg.get("sa_creditors_period_path", ""),
+            is_master=False,
+        )
+
+        # Divider
+        ctk.CTkFrame(tab_im, height=1, fg_color="gray40").grid(
+            row=9, column=0, sticky="ew", padx=18, pady=(4, 8)
+        )
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Options row
+        # ═════════════════════════════════════════════════════════════════════
+        im_opts_frame = ctk.CTkFrame(tab_im, fg_color="transparent")
+        im_opts_frame.grid(row=10, column=0, sticky="w", padx=18, pady=(0, 8))
+
+        self._im_opt_push = ctk.CTkCheckBox(
+            im_opts_frame, text="Push to Supabase after merge",
+            font=ctk.CTkFont(size=12),
+        )
+        self._im_opt_push.select()
+        self._im_opt_push.pack(side="left", padx=(0, 24))
+
+        self._im_opt_ank = ctk.CTkCheckBox(
+            im_opts_frame, text="Flag ANK entries",
+            font=ctk.CTkFont(size=12),
+        )
+        self._im_opt_ank.select()
+        self._im_opt_ank.pack(side="left")
+
+        # ═════════════════════════════════════════════════════════════════════
+        # Action buttons
+        # ═════════════════════════════════════════════════════════════════════
+        btn_frame_im = ctk.CTkFrame(tab_im, fg_color="transparent")
+        btn_frame_im.grid(row=11, column=0, sticky="ew", padx=18, pady=(4, 0))
+        btn_frame_im.grid_columnconfigure((0, 1), weight=1)
+
+        self._btn_im_deb = ctk.CTkButton(
+            btn_frame_im,
+            text="🔄  Merge & Sync Debtors",
+            height=46,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color=("#d97706", "#92400e"),
+            hover_color=("#b45309", "#78350f"),
+            command=self._confirm_im_debtors,
+        )
+        self._btn_im_deb.grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=(0, 6))
+
+        self._btn_im_cred = ctk.CTkButton(
+            btn_frame_im,
+            text="🔄  Merge & Sync Creditors",
+            height=46,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color=("#d97706", "#92400e"),
+            hover_color=("#b45309", "#78350f"),
+            command=self._confirm_im_creditors,
+        )
+        self._btn_im_cred.grid(row=0, column=1, sticky="ew", padx=(6, 0), pady=(0, 6))
+
+        self._btn_im_both = ctk.CTkButton(
+            tab_im,
+            text="🔄  Merge & Sync Both",
+            height=50,
+            font=ctk.CTkFont(size=15, weight="bold"),
+            fg_color=("#1d4ed8", "#1e3a8a"),
+            hover_color=("#1e40af", "#172554"),
+            command=self._confirm_im_both,
+        )
+        self._btn_im_both.grid(row=12, column=0, sticky="ew", padx=18, pady=(0, 4))
+
+        ctk.CTkLabel(
+            tab_im,
+            text="Merges period transactions into master → re-analyses → saves master → syncs to Supabase",
+            font=ctk.CTkFont(size=11),
+            text_color="gray",
+            anchor="center",
+        ).grid(row=13, column=0, padx=18, pady=(0, 10))
+
+    # ── Master/period file row builder ────────────────────────────────────────
+
+    def _make_master_file_row(
+        self, parent, row: int, label: str, config_key: str,
+        current_val: str, is_master: bool
+    ) -> tuple:
+        """
+        Build a labelled path row with Browse… and Clear buttons.
+        is_master=True  → filetypes = .xlsx only (master copy)
+        is_master=False → filetypes = .xls .xlsx .xlsm (raw Tally export)
+        """
+        frame = ctk.CTkFrame(parent)
+        frame.grid(row=row, column=0, sticky="ew", padx=18, pady=(0, 4))
+        frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            frame, text=label,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            anchor="w",
+        ).grid(row=0, column=0, columnspan=4, sticky="w", padx=12, pady=(8, 2))
+
+        var = tk.StringVar(value=current_val if current_val else "No file selected")
+
+        ctk.CTkEntry(
+            frame, textvariable=var,
+            state="readonly", height=30,
+            font=ctk.CTkFont(size=11),
+        ).grid(row=1, column=0, columnspan=2, sticky="ew", padx=(12, 6), pady=(0, 8))
+
+        filetypes = (
+            [("Excel files", "*.xlsx"), ("All files", "*.*")]
+            if is_master
+            else _ext_filter()
+        )
+
+        ctk.CTkButton(
+            frame, text="Browse…", width=76, height=30,
+            command=lambda: self._im_browse(var, config_key, filetypes),
+        ).grid(row=1, column=2, padx=(0, 4), pady=(0, 8))
+
+        ctk.CTkButton(
+            frame, text="Clear", width=54, height=30,
+            fg_color="transparent", border_width=1,
+            command=lambda: self._im_clear(var, config_key),
+        ).grid(row=1, column=3, padx=(0, 12), pady=(0, 8))
+
+        return var, frame
+
+    def _im_browse(self, var: tk.StringVar, config_key: str, filetypes: list):
+        path = filedialog.askopenfilename(
+            title="Select file",
+            filetypes=filetypes,
+        )
+        if path:
+            var.set(path)
+            cfg = self._get_cfg()
+            cfg[config_key] = path
+            self._save_cfg(cfg)
+            self._log(f"📁 {config_key} → {os.path.basename(path)}")
+
+    def _im_clear(self, var: tk.StringVar, config_key: str):
+        var.set("No file selected")
+        cfg = self._get_cfg()
+        cfg[config_key] = ""
+        self._save_cfg(cfg)
+        self._log(f"✗ Cleared {config_key}")
+
+    # ── IM button state ───────────────────────────────────────────────────────
+
+    def _set_im_buttons_enabled(self, enabled: bool):
+        state = "normal" if enabled else "disabled"
+        def _set():
+            self._btn_as_deb.configure(state=state)
+            self._btn_as_cred.configure(state=state)
+            self._btn_as_all.configure(state=state)
+            self._btn_ao_process.configure(state=state)
+            self._btn_ao_reset.configure(state=state)
+            self._btn_im_deb.configure(state=state)
+            self._btn_im_cred.configure(state=state)
+            self._btn_im_both.configure(state=state)
+        self.after(0, _set)
+
+    # ── IM path helpers ───────────────────────────────────────────────────────
+
+    def _im_get_master_path(self, var: tk.StringVar, ledger_label: str) -> str | None:
+        """Validate and return master path, showing dialog if invalid."""
+        val = var.get().strip()
+        if not val or val == "No file selected":
+            messagebox.showinfo(
+                "No Master Copy",
+                f"No {ledger_label} master copy found.\n\n"
+                "Please run 'Analyse Only' first to create a master, "
+                "then set its path here using Browse…",
+            )
+            return None
+        if not Path(val).exists():
+            messagebox.showerror(
+                "File Not Found",
+                f"Master file not found:\n{val}\n\n"
+                "Please browse to the correct location.",
+            )
+            return None
+        return val
+
+    def _im_get_period_path(self, var: tk.StringVar, ledger_label: str) -> str | None:
+        val = var.get().strip()
+        if not val or val == "No file selected":
+            messagebox.showerror(
+                "No Period File",
+                f"Please select the {ledger_label} period export file first.",
+            )
+            return None
+        if not Path(val).exists():
+            messagebox.showerror(
+                "File Not Found",
+                f"Period file not found:\n{val}",
+            )
+            return None
+        return val
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # INCREMENTAL MERGE — confirm + run
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _confirm_im_debtors(self):
+        master = self._im_get_master_path(self._im_deb_master_var, "Debtors")
+        if not master:
+            return
+        period = self._im_get_period_path(self._im_deb_period_var, "Debtors")
+        if not period:
+            return
+        do_push = bool(self._im_opt_push.get())
+        push_msg = "\nMerged data will be pushed to Supabase." if do_push else "\nSupabase push is OFF — master file only."
+        if not messagebox.askyesno(
+            "Merge & Sync Debtors",
+            f"Master: {os.path.basename(master)}\n"
+            f"Period: {os.path.basename(period)}\n"
+            f"{push_msg}\n\n"
+            "The master .xlsx will be overwritten. Proceed?",
+        ):
+            return
+        self._run_im("debtor", master, period)
+
+    def _confirm_im_creditors(self):
+        master = self._im_get_master_path(self._im_cred_master_var, "Creditors")
+        if not master:
+            return
+        period = self._im_get_period_path(self._im_cred_period_var, "Creditors")
+        if not period:
+            return
+        do_push = bool(self._im_opt_push.get())
+        push_msg = "\nMerged data will be pushed to Supabase." if do_push else "\nSupabase push is OFF — master file only."
+        if not messagebox.askyesno(
+            "Merge & Sync Creditors",
+            f"Master: {os.path.basename(master)}\n"
+            f"Period: {os.path.basename(period)}\n"
+            f"{push_msg}\n\n"
+            "The master .xlsx will be overwritten. Proceed?",
+        ):
+            return
+        self._run_im("creditor", master, period)
+
+    def _confirm_im_both(self):
+        deb_master = self._im_get_master_path(self._im_deb_master_var, "Debtors")
+        if not deb_master:
+            return
+        deb_period = self._im_get_period_path(self._im_deb_period_var, "Debtors")
+        if not deb_period:
+            return
+        cred_master = self._im_get_master_path(self._im_cred_master_var, "Creditors")
+        if not cred_master:
+            return
+        cred_period = self._im_get_period_path(self._im_cred_period_var, "Creditors")
+        if not cred_period:
+            return
+        do_push = bool(self._im_opt_push.get())
+        push_msg = "Merged data will be pushed to Supabase." if do_push else "Supabase push is OFF — master files only."
+        if not messagebox.askyesno(
+            "Merge & Sync Both",
+            f"Debtors master:  {os.path.basename(deb_master)}\n"
+            f"Debtors period:  {os.path.basename(deb_period)}\n"
+            f"Creditors master: {os.path.basename(cred_master)}\n"
+            f"Creditors period: {os.path.basename(cred_period)}\n\n"
+            f"{push_msg}\n\n"
+            "Both master .xlsx files will be overwritten. Proceed?",
+        ):
+            return
+        self._run_im_both(
+            deb_master, deb_period,
+            cred_master, cred_period,
+        )
+
+    def _run_im(self, party_type: str, master_path: str, period_path: str):
+        """Run incremental merge for a single ledger type."""
+        if self._busy:
+            messagebox.showwarning("Busy", "A task is already running. Please wait.")
+            return
+        self._busy = True
+        self._set_im_buttons_enabled(False)
+
+        cfg = self._get_cfg()
+        do_push = bool(self._im_opt_push.get())
+        flag_ank = bool(self._im_opt_ank.get())
+        label = party_type.upper() + "S"
+
+        self._log("─" * 52)
+        self._log(f"🔄 Incremental Merge — {label}")
+        self._set_progress(0, "Starting merge…")
+
+        def worker():
+            import time
+            t0 = time.time()
+            try:
+                # Merge
+                vendor_data, stats = merge_period_into_master(
+                    master_path=master_path,
+                    period_path=period_path,
+                    ledger_type=party_type,
+                    log_callback=self._log,
+                )
+                self._set_progress(0.6, "Saving master…")
+
+                # Save master
+                self._log(f"→ Saving master: {os.path.basename(master_path)} …")
+                write_output_xlsx(
+                    vendor_data, master_path,
+                    ledger_type=party_type,
+                    include_summary=True,
+                    include_outstanding=True,
+                    progress_callback=lambda c, t, v: self._update_progress(c, t, v),
+                )
+                self._log(f"  ✓ Saved → {os.path.basename(master_path)}")
+                self._set_progress(0.75, "Master saved ✓")
+
+                # Optionally push to Supabase
+                if do_push:
+                    err = self._validate_creds()
+                    if err:
+                        self._log(f"⚠  Supabase push skipped — {err}")
+                    else:
+                        self._set_progress(0.80, "Pushing to Supabase…")
+                        self._log("📤 Pushing to Supabase…")
+                        success, msg = fin_sync_core.push_analysed_data(
+                            party_type=party_type,
+                            vendor_data=vendor_data,
+                            supabase_url=cfg["supabase_url"],
+                            service_role_key=cfg["service_role_key"],
+                            log_callback=self._log,
+                        )
+                        if success:
+                            self._log(f"  ✓ {msg}")
+                        else:
+                            self._log(f"  ✗ {msg}")
+                else:
+                    self._log("  (Supabase push skipped — option unchecked)")
+
+                elapsed = time.time() - t0
+                self._set_progress(1.0, "Done ✓")
+                self._log(f"✅ {label} merged and synced ({elapsed:.1f}s)")
+
+            except Exception as exc:
+                import traceback
+                self._log(f"✗ Error: {exc}")
+                self._log(traceback.format_exc())
+                self._set_progress(1.0, "Error ✗")
+            finally:
+                self._busy = False
+                self._set_im_buttons_enabled(True)
+                self._log("─" * 52)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _run_im_both(
+        self,
+        deb_master: str, deb_period: str,
+        cred_master: str, cred_period: str,
+    ):
+        """Run incremental merge for both Debtors then Creditors."""
+        if self._busy:
+            messagebox.showwarning("Busy", "A task is already running. Please wait.")
+            return
+        self._busy = True
+        self._set_im_buttons_enabled(False)
+
+        cfg = self._get_cfg()
+        do_push = bool(self._im_opt_push.get())
+        flag_ank = bool(self._im_opt_ank.get())
+
+        self._log("─" * 52)
+        self._log("🔄 Incremental Merge — BOTH (Debtors then Creditors)")
+        self._set_progress(0, "Starting…")
+
+        def worker():
+            import time
+            t0 = time.time()
+            results = []
+            pairs = [
+                ("debtor",   "DEBTORS",   deb_master,  deb_period),
+                ("creditor", "CREDITORS", cred_master, cred_period),
+            ]
+
+            for step_idx, (party_type, label, master_path, period_path) in enumerate(pairs):
+                base_progress = step_idx * 0.5
+                self._log(f"\n[{step_idx+1}/2] {label}")
+                self._set_progress(base_progress, f"{label}: merging…")
+
+                try:
+                    vendor_data, stats = merge_period_into_master(
+                        master_path=master_path,
+                        period_path=period_path,
+                        ledger_type=party_type,
+                        log_callback=self._log,
+                    )
+                    self._set_progress(base_progress + 0.3, f"{label}: saving master…")
+
+                    self._log(f"→ Saving master: {os.path.basename(master_path)} …")
+                    write_output_xlsx(
+                        vendor_data, master_path,
+                        ledger_type=party_type,
+                        include_summary=True,
+                        include_outstanding=True,
+                        progress_callback=lambda c, t, v: self._update_progress(c, t, v),
+                    )
+                    self._log(f"  ✓ Saved → {os.path.basename(master_path)}")
+
+                    if do_push:
+                        err = self._validate_creds()
+                        if err:
+                            self._log(f"  ⚠  Supabase push skipped — {err}")
+                            results.append((label, False, err))
+                        else:
+                            self._set_progress(base_progress + 0.4, f"{label}: pushing…")
+                            self._log(f"📤 Pushing {label} to Supabase…")
+                            success, msg = fin_sync_core.push_analysed_data(
+                                party_type=party_type,
+                                vendor_data=vendor_data,
+                                supabase_url=cfg["supabase_url"],
+                                service_role_key=cfg["service_role_key"],
+                                log_callback=self._log,
+                            )
+                            results.append((label, success, msg))
+                            self._log(f"  {'✓' if success else '✗'} {msg}")
+                    else:
+                        self._log(f"  (Supabase push skipped)")
+                        results.append((label, True, "Push skipped"))
+
+                    self._set_progress(base_progress + 0.5, f"{label}: done")
+
+                except Exception as exc:
+                    import traceback
+                    self._log(f"✗ {label} failed: {exc}")
+                    self._log(traceback.format_exc())
+                    results.append((label, False, str(exc)))
+
+            # Summary
+            elapsed = time.time() - t0
+            self._log("\n── Merge Both Summary ──")
+            all_ok = True
+            for name, ok, msg in results:
+                icon = "✅" if ok else "❌"
+                self._log(f"  {icon} {name}")
+                if not ok:
+                    all_ok = False
+            if all_ok:
+                self._set_progress(1.0, "Done ✓")
+                self._log(f"🎉 Both merges completed successfully ({elapsed:.1f}s).")
+            else:
+                self._set_progress(1.0, "Some errors ✗")
+                self._log("⚠  One or more merges failed — see log above.")
+            self._log("─" * 52)
+
+            self._busy = False
+            self._set_im_buttons_enabled(True)
 
         threading.Thread(target=worker, daemon=True).start()
