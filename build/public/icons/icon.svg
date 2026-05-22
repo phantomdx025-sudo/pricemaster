@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#0e1228"/>
+      <stop offset="100%" stop-color="#000308"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Stars — scattered asymmetrically -->
+  <circle cx="98"  cy="72"  r="2.5" fill="#ffffff" opacity="0.85"/>
+  <circle cx="410" cy="95"  r="1.8" fill="#ffffff" opacity="0.70"/>
+  <circle cx="60"  cy="320" r="1.5" fill="#a89ef9" opacity="0.60"/>
+  <circle cx="448" cy="390" r="2.2" fill="#ffffff" opacity="0.75"/>
+  <circle cx="380" cy="52"  r="1.2" fill="#ffffff" opacity="0.50"/>
+
+  <!-- The "A" — geometric, slightly angular, electric violet with glow -->
+  <!-- Built as two outer legs + crossbar, sharp apex -->
+  <g filter="url(#glow)">
+    <!-- Left leg -->
+    <polygon points="256,88  152,420  196,420  256,200" fill="#7c6ff7"/>
+    <!-- Right leg -->
+    <polygon points="256,88  316,200  360,420  316,420" fill="#7c6ff7"/>
+    <!-- Crossbar -->
+    <rect x="178" y="290" width="156" height="38" rx="4" fill="#7c6ff7"/>
+  </g>
+
+  <!-- Inner triangle cutout (hollow A) — space colour -->
+  <polygon points="256,160  220,280  292,280" fill="#04060d" opacity="0.92"/>
+
+  <!-- Subtle violet rim on the apex for depth -->
+  <polygon points="256,88  245,115  267,115" fill="#a89ef9" opacity="0.5" filter="url(#softglow)"/>
+</svg>
