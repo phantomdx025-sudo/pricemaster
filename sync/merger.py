@@ -37,7 +37,7 @@ from processor import compute_running_balances, run_fifo_matching, detect_anomal
 class MergeStats:
     """Counters and detail lists produced by merge_period_into_master()."""
     parties_merged: int = 0       # parties that had ≥1 new rows added
-    parties_skipped: int = 0      # parties with opening-balance mismatch
+    parties_skipped: int = 0      # parties with opening-balance mismatch (still merged, not skipped)
     parties_new: int = 0          # brand new parties not in master
     rows_added: int = 0           # total new transaction rows appended
     rows_skipped: int = 0         # duplicate rows skipped (already in master)
@@ -228,18 +228,24 @@ def merge_period_into_master(
             master_data = vendor_data[party_name]
             master_closing = master_data.get("computed_closing", 0.0)
 
-            # Cross-check: period opening vs master closing
+            # Cross-check: period opening vs master closing.
+            # If they differ by ≥ ₹0.50 it means Tally's period export has a
+            # different opening than where our master left off (backdated entries,
+            # cancellations, rounding, etc.).  We do NOT skip — we trust the master
+            # closing as the correct anchor and simply append new transactions on
+            # top of it.  The re-analysis pipeline will recompute everything from
+            # the master's transaction history, so the running balances stay correct.
             diff = master_closing - period_opening
             if abs(diff) >= 0.50:
                 _log(
                     log_callback,
-                    f"  ⚠ SKIPPED: {party_name} — master closing ₹{master_closing:,.2f} "
-                    f"but period opening ₹{period_opening:,.2f} "
-                    f"(diff ₹{diff:,.2f}) — manual re-sync needed",
+                    f"  ⚠ Opening mismatch (proceeding): {party_name} — "
+                    f"master closing ₹{master_closing:,.2f} / "
+                    f"period opening ₹{period_opening:,.2f} "
+                    f"(diff ₹{diff:,.2f}) — using master closing as anchor",
                 )
                 stats.parties_skipped += 1
                 stats.skipped_parties.append((party_name, master_closing, period_opening))
-                continue
 
             # Build lookup of existing transactions keyed by (date, vch_type, vch_no)
             existing_keys: dict = {}   # key → index in master transactions list
@@ -326,7 +332,8 @@ def merge_period_into_master(
     _log(
         log_callback,
         f"→ Merge complete: {stats.parties_merged} merged, {stats.parties_new} new, "
-        f"{stats.parties_skipped} skipped, {stats.rows_added} rows added, "
+        f"{stats.parties_skipped} opening-mismatch (proceeded anyway), "
+        f"{stats.rows_added} rows added, "
         f"{stats.rows_skipped} duplicates, {stats.rows_amended} amended",
     )
 
